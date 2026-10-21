@@ -4,7 +4,7 @@ A small offline Windows app for reading and editing Markdown files. Editor on th
 
 ## Download
 
-**[Download MarkdownViewer.exe](https://github.com/yaqzans/md-preview/releases/latest/download/MarkdownViewer.exe)** (about 14 MB, one file)
+**[Download MarkdownViewer.exe](https://github.com/yaqzans/markdown-viewer/releases/latest/download/MarkdownViewer.exe)** (about 14 MB, one file)
 
 Double-click it. Nothing to install, no internet needed. It uses the Edge WebView2 engine that comes with Windows 10 and 11.
 
