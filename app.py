@@ -1,6 +1,6 @@
-"""MD Preview desktop app: a pywebview window around index.html.
+"""Markdown Viewer desktop app: a pywebview window around index.html.
 
-Usage: MDPreview.exe [file.md]
+Usage: MarkdownViewer.exe [file.md]
 """
 import os
 import sys
@@ -9,7 +9,7 @@ import webview
 
 # PyInstaller unpacks bundled files to sys._MEIPASS; in dev they sit next to this script
 BASE = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-DATA = os.path.join(os.environ.get('LOCALAPPDATA', BASE), 'MDPreview')  # keeps localStorage between runs
+DATA = os.path.join(os.environ.get('LOCALAPPDATA', BASE), 'MarkdownViewer')  # keeps localStorage between runs
 
 
 def read_md(path):
@@ -73,7 +73,7 @@ def print_to_pdf(window, path):
 
 def main():
     start_path = sys.argv[1] if len(sys.argv) > 1 else None
-    title = 'MD Preview' + (' - ' + os.path.basename(start_path) if start_path else '')
+    title = 'Markdown Viewer' + (' - ' + os.path.basename(start_path) if start_path else '')
     webview.create_window(title, os.path.join(BASE, 'index.html'), js_api=Api(start_path),
                           width=1280, height=820, min_size=(600, 400))
     webview.start(gui='edgechromium', private_mode=False, storage_path=DATA)

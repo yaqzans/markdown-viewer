@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MD Preview</title>
+<title>Markdown Viewer</title>
 <script src="vendor/marked.min.js"></script>
 <script src="vendor/purify.min.js"></script>
 <script src="vendor/highlight.min.js"></script>
@@ -79,7 +79,7 @@
 </head>
 <body>
 <header>
-  <span class="title">MD Preview</span>
+  <span class="title">Markdown Viewer</span>
   <button id="open">Open</button>
   <button id="copy">Copy</button>
   <button id="pdf">Export PDF</button>
@@ -138,7 +138,7 @@ function show(name, text) {
   editor.value = text;
   currentName = name;
   $('filename').textContent = name;
-  document.title = name + ' - MD Preview';
+  document.title = name + ' - Markdown Viewer';
   render();
   preview.scrollTop = editor.scrollTop = 0;
 }
@@ -171,7 +171,7 @@ $('reset').onclick = () => {
   if (editor.value !== SAMPLE && !confirm('Clear the editor and go back to the sample?')) return;
   show('document.md', SAMPLE);
   $('filename').textContent = 'drop a .md file anywhere';
-  document.title = 'MD Preview';
+  document.title = 'Markdown Viewer';
 };
 
 // drag and drop anywhere

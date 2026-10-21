@@ -1,10 +1,10 @@
-# MD Preview
+# Markdown Viewer
 
 A small offline Windows app for reading and editing Markdown files. Editor on the left, live preview on the right.
 
 ## Download
 
-**[Download MDPreview.exe](https://github.com/yaqzans/md-preview/releases/latest/download/MDPreview.exe)** (about 14 MB, one file)
+**[Download MarkdownViewer.exe](https://github.com/yaqzans/md-preview/releases/latest/download/MarkdownViewer.exe)** (about 14 MB, one file)
 
 Double-click it. Nothing to install, no internet needed. It uses the Edge WebView2 engine that comes with Windows 10 and 11.
 
@@ -13,7 +13,7 @@ Windows SmartScreen may warn the first time because the exe is not signed. Click
 ## Features
 
 - Live preview with GitHub-style rendering: tables, task lists, code blocks with syntax colours
-- **Open** a `.md` file, drag one onto the window, or use **Open with > MDPreview.exe** in Explorer
+- **Open** a `.md` file, drag one onto the window, or use **Open with > MarkdownViewer.exe** in Explorer
 - **Export PDF** saves a real `.pdf` file: preview only, always light theme, full length
 - **Copy** the markdown, **Reset** to the sample
 - **Sync scroll** works both ways: scrolling either pane moves the other
@@ -26,7 +26,7 @@ Windows SmartScreen may warn the first time because the exe is not signed. Click
 ```
 py -3.11 -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\pyinstaller --noconfirm --onefile --windowed --name MDPreview --add-data "index.html;." --add-data "vendor;vendor" app.py
+.venv\Scripts\pyinstaller --noconfirm --onefile --windowed --name MarkdownViewer --add-data "index.html;." --add-data "vendor;vendor" app.py
 ```
 
 The exe lands in `dist\`. `index.html` also works on its own in a browser (Export PDF then uses the print dialog).
