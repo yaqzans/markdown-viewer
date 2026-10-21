@@ -12,6 +12,7 @@ Windows SmartScreen may warn the first time because the exe is not signed. Click
 
 ## Features
 
+- Editor with line numbers and markdown syntax colouring
 - Live preview with GitHub-style rendering: tables, task lists, code blocks with syntax colours
 - **Open** a `.md` file, drag one onto the window, or use **Open with > MarkdownViewer.exe** in Explorer
 - **Export PDF** saves a real `.pdf` file: preview only, always light theme, full length
@@ -31,4 +32,4 @@ py -3.11 -m venv .venv
 
 The exe lands in `dist\`. `index.html` also works on its own in a browser (Export PDF then uses the print dialog).
 
-Bundled libraries in `vendor/`: marked 12.0.2, DOMPurify 3.1.6, highlight.js 11.9.0.
+Bundled libraries in `vendor/`: marked 12.0.2, DOMPurify 3.1.6, highlight.js 11.9.0, CodeMirror 5.65.16.

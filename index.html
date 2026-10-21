@@ -7,6 +7,9 @@
 <script src="vendor/marked.min.js"></script>
 <script src="vendor/purify.min.js"></script>
 <script src="vendor/highlight.min.js"></script>
+<script src="vendor/codemirror.min.js"></script>
+<script src="vendor/markdown.min.js"></script>
+<link rel="stylesheet" href="vendor/codemirror.min.css">
 <link id="hl-light" rel="stylesheet" href="vendor/github.min.css">
 <link id="hl-dark" rel="stylesheet" href="vendor/github-dark.min.css" disabled>
 <style>
@@ -29,8 +32,23 @@
   header .file { margin-left: auto; opacity: .7; font-size: 13px; }
 
   main { flex: 1; display: flex; min-height: 0; }
-  #editor { width: 40%; min-width: 120px; resize: none; border: 0; padding: 12px 16px;
-            font: 14px/1.6 Consolas, "Cascadia Mono", monospace; background: var(--bg); color: var(--fg); outline: none; }
+  #editor { width: 40%; min-width: 120px; }
+  /* CodeMirror editor, recoloured from the page tokens so dark mode follows */
+  #editor .CodeMirror { height: 100%; font: 14px/1.6 Consolas, "Cascadia Mono", monospace; background: var(--bg); color: var(--fg); }
+  #editor .CodeMirror-lines { padding: 12px 0; }
+  #editor .CodeMirror-gutters { background: var(--bg); border-right: 1px solid var(--border); }
+  #editor .CodeMirror-linenumber { color: var(--muted); padding: 0 10px 0 8px; }
+  #editor .CodeMirror-cursor { border-left-color: var(--fg); }
+  #editor .CodeMirror-selected, #editor .CodeMirror-focused .CodeMirror-selected { background: rgba(68,147,248,.25); }
+  #editor .CodeMirror-line::selection, #editor .CodeMirror-line > span::selection, #editor .CodeMirror-line > span > span::selection { background: rgba(68,147,248,.25); }
+  #editor .cm-header { color: var(--link); font-weight: 600; }
+  #editor .cm-strong { font-weight: 700; }
+  #editor .cm-em { font-style: italic; }
+  #editor .cm-link, #editor .cm-url, #editor .cm-string { color: var(--link); }
+  #editor .cm-comment { color: #cf222e; }
+  body.dark #editor .cm-comment { color: #ff7b72; }
+  #editor .cm-quote, #editor .cm-hr { color: var(--muted); }
+  #editor .cm-variable-2, #editor .cm-variable-3, #editor .cm-keyword { color: inherit; }
   #divider { width: 6px; cursor: col-resize; background: var(--border); flex: none; }
   #divider:hover, body.resizing #divider { background: var(--link); }
   body.resizing { cursor: col-resize; user-select: none; }
@@ -91,7 +109,7 @@
   <input type="file" id="picker" accept=".md,.markdown,.txt" hidden>
 </header>
 <main>
-  <textarea id="editor" spellcheck="false"></textarea>
+  <div id="editor"></div>
   <div id="divider"></div>
   <div id="preview"><article class="md" id="out"></article></div>
 </main>
@@ -115,6 +133,8 @@ print("hello")
 `;
 const $ = id => document.getElementById(id);
 const editor = $('editor'), preview = $('preview'), out = $('out');
+const cm = CodeMirror(editor, { mode: 'markdown', lineNumbers: true, lineWrapping: true });
+const scroller = cm.getScrollerElement();
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
@@ -126,21 +146,23 @@ let currentName = 'document.md';
 marked.setOptions({ gfm: true, breaks: false });
 
 function render() {
-  out.innerHTML = DOMPurify.sanitize(marked.parse(editor.value));
+  const text = cm.getValue();
+  out.innerHTML = DOMPurify.sanitize(marked.parse(text));
   out.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
-  store.set('md-text', editor.value);
+  store.set('md-text', text);
 }
 
 let timer;
-editor.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(render, 120); });
+cm.on('change', () => { clearTimeout(timer); timer = setTimeout(render, 120); });
 
 function show(name, text) {
-  editor.value = text;
+  cm.setValue(text);
+  cm.clearHistory();
   currentName = name;
   $('filename').textContent = name;
   document.title = name + ' - Markdown Viewer';
   render();
-  preview.scrollTop = editor.scrollTop = 0;
+  preview.scrollTop = scroller.scrollTop = 0;
 }
 function load(file) {
   const r = new FileReader();
@@ -156,8 +178,12 @@ $('picker').onchange = e => e.target.files[0] && load(e.target.files[0]);
 
 function flash(id, text) { const b = $(id), old = b.textContent; b.textContent = text; setTimeout(() => b.textContent = old, 1200); }
 $('copy').onclick = async () => {
-  try { await navigator.clipboard.writeText(editor.value); }
-  catch { editor.select(); document.execCommand('copy'); editor.setSelectionRange(0, 0); }
+  try { await navigator.clipboard.writeText(cm.getValue()); }
+  catch {
+    const t = document.createElement('textarea');
+    t.value = cm.getValue(); document.body.appendChild(t); t.select();
+    document.execCommand('copy'); t.remove();
+  }
   flash('copy', 'Copied');
 };
 $('pdf').onclick = async () => {
@@ -168,7 +194,7 @@ $('pdf').onclick = async () => {
   else if (res) flash('pdf', 'Saved');
 };
 $('reset').onclick = () => {
-  if (editor.value !== SAMPLE && !confirm('Clear the editor and go back to the sample?')) return;
+  if (cm.getValue() !== SAMPLE && !confirm('Clear the editor and go back to the sample?')) return;
   show('document.md', SAMPLE);
   $('filename').textContent = 'drop a .md file anywhere';
   document.title = 'Markdown Viewer';
@@ -182,13 +208,14 @@ document.addEventListener('drop', e => e.dataTransfer.files[0] && load(e.dataTra
 // sync scroll by proportion, both ways. Only the pane the user is driving
 // (mouse over it, or typing in it) pushes its position to the other one,
 // so the programmatic scroll on the other side never echoes back.
-let driver = editor;
-[editor, preview].forEach(el => {
+let driver = scroller;
+cm.on('focus', () => driver = scroller);
+preview.addEventListener('focus', () => driver = preview);
+[scroller, preview].forEach(el => {
   el.addEventListener('mouseenter', () => driver = el);
-  el.addEventListener('focus', () => driver = el);
   el.addEventListener('scroll', () => {
     if (!$('sync').checked || el !== driver) return;
-    const to = el === editor ? preview : editor;
+    const to = el === scroller ? preview : scroller;
     to.scrollTop = el.scrollTop / (el.scrollHeight - el.clientHeight || 1) * (to.scrollHeight - to.clientHeight);
   });
 });
@@ -200,6 +227,7 @@ $('divider').addEventListener('mousedown', e => {
   const move = ev => {
     const pct = Math.min(85, Math.max(10, ev.clientX / window.innerWidth * 100));
     editor.style.width = pct + '%';
+    cm.refresh();
   };
   const up = () => {
     document.body.classList.remove('resizing');
@@ -217,12 +245,13 @@ function setDark(on) {
   $('hl-dark').disabled = !on; $('hl-light').disabled = on;
 }
 $('dark').onchange = e => { setDark(e.target.checked); store.set('md-dark', e.target.checked ? '1' : ''); };
-$('hide-editor').onchange = e => document.body.classList.toggle('preview-only', e.target.checked);
+$('hide-editor').onchange = e => { document.body.classList.toggle('preview-only', e.target.checked); cm.refresh(); };
 
 const dark = !!store.get('md-dark');
 $('dark').checked = dark; setDark(dark);
 if (store.get('md-split')) editor.style.width = store.get('md-split');
-editor.value = store.get('md-text') ?? SAMPLE;
+cm.setValue(store.get('md-text') ?? SAMPLE);
+cm.clearHistory();
 render();
 
 // a file passed on the command line ("Open with", double-click) wins over the autosave
