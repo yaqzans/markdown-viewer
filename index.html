@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MD Preview</title>
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script src="vendor/highlight.min.js"></script>
+<link id="hl-light" rel="stylesheet" href="vendor/github.min.css">
+<link id="hl-dark" rel="stylesheet" href="vendor/github-dark.min.css" disabled>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0;
+    --code-bg: #f6f8fa; --bar: #444; --bar-fg: #fff; --link: #0969da; --row: #f6f8fa;
+  }
+  body.dark {
+    --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d;
+    --code-bg: #161b22; --bar: #222; --bar-fg: #eee; --link: #4493f8; --row: #151b23;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
+  body { display: flex; flex-direction: column; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  header { display: flex; align-items: center; gap: 4px; padding: 8px 16px; background: var(--bar); color: var(--bar-fg); flex-wrap: wrap; user-select: none; }
+  header .title { font-weight: 600; margin-right: 12px; }
+  header button, header label { background: none; border: 0; color: inherit; font: inherit; padding: 4px 8px; cursor: pointer; border-radius: 4px; }
+  header button:hover, header label:hover { background: rgba(255,255,255,.12); }
+  header .file { margin-left: auto; opacity: .7; font-size: 13px; }
+
+  main { flex: 1; display: flex; min-height: 0; }
+  #editor { width: 40%; min-width: 120px; resize: none; border: 0; padding: 12px 16px;
+            font: 14px/1.6 Consolas, "Cascadia Mono", monospace; background: var(--bg); color: var(--fg); outline: none; }
+  #divider { width: 6px; cursor: col-resize; background: var(--border); flex: none; }
+  #divider:hover, body.resizing #divider { background: var(--link); }
+  body.resizing { cursor: col-resize; user-select: none; }
+  #preview { flex: 1; overflow: auto; padding: 16px 48px 64px; min-width: 120px; }
+  body.preview-only #editor, body.preview-only #divider { display: none; }
+  body.drag main { outline: 3px dashed var(--link); outline-offset: -8px; }
+
+  /* rendered markdown */
+  .md { max-width: 980px; line-height: 1.6; font-size: 16px; }
+  .md h1, .md h2 { border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+  .md h1, .md h2, .md h3, .md h4 { margin: 1.4em 0 .6em; line-height: 1.25; }
+  .md a { color: var(--link); }
+  .md code { font-family: Consolas, monospace; font-size: 85%; background: var(--code-bg); padding: .2em .4em; border-radius: 6px; }
+  .md pre { background: var(--code-bg); padding: 16px; border-radius: 6px; overflow: auto; }
+  .md pre code { background: none; padding: 0; font-size: 85%; }
+  .md pre code.hljs { background: none; padding: 0; }
+  .md blockquote { margin: 0; padding: 0 1em; color: var(--muted); border-left: .25em solid var(--border); }
+  .md table { border-collapse: collapse; display: block; overflow: auto; margin: 1em 0; }
+  .md th, .md td { border: 1px solid var(--border); padding: 6px 13px; }
+  .md th { font-weight: 600; }
+  .md tr:nth-child(2n) { background: var(--row); }
+  .md img { max-width: 100%; }
+  .md hr { border: 0; border-top: 1px solid var(--border); margin: 24px 0; }
+  .md li input[type=checkbox] { margin-right: .4em; }
+
+  @media (max-width: 700px) {
+    main { flex-direction: column; }
+    #editor { width: 100% !important; height: 40%; }
+    #divider { display: none; }
+    #preview { padding: 16px; }
+  }
+  /* PDF output: preview only, always light, full length */
+  @media print {
+    body, body.dark {
+      --bg: #fff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0;
+      --code-bg: #f6f8fa; --link: #0969da; --row: #f6f8fa;
+    }
+    html, body { height: auto; display: block; }
+    header, #editor, #divider { display: none !important; }
+    main, #preview { display: block; overflow: visible; padding: 0; }
+    .md { max-width: none; }
+    .md table { display: table; }
+    .md pre, .md tr, .md img { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">MD Preview</span>
+  <button id="open">Open</button>
+  <button id="copy">Copy</button>
+  <button id="pdf">Export PDF</button>
+  <button id="reset">Reset</button>
+  <label><input type="checkbox" id="sync" checked> Sync scroll</label>
+  <label><input type="checkbox" id="hide-editor"> Hide editor</label>
+  <label><input type="checkbox" id="dark"> Dark mode</label>
+  <span class="file" id="filename">drop a .md file anywhere</span>
+  <input type="file" id="picker" accept=".md,.markdown,.txt" hidden>
+</header>
+<main>
+  <textarea id="editor" spellcheck="false"></textarea>
+  <div id="divider"></div>
+  <div id="preview"><article class="md" id="out"></article></div>
+</main>
+<script>
+const SAMPLE = `# Markdown Preview
+
+Type on the left, or **Open** / drag-drop a \`.md\` file.
+
+| Feature | Supported |
+|---|---|
+| Tables | yes |
+| Code highlighting | yes |
+| Task lists | yes |
+
+- [x] lightweight
+- [ ] bloated
+
+\`\`\`python
+print("hello")
+\`\`\`
+`;
+const $ = id => document.getElementById(id);
+const editor = $('editor'), preview = $('preview'), out = $('out');
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+// pywebview injects window.pywebview.api when running as the desktop app
+const api = () => window.pywebview && window.pywebview.api;
+let currentName = 'document.md';
+
+marked.setOptions({ gfm: true, breaks: false });
+
+function render() {
+  out.innerHTML = DOMPurify.sanitize(marked.parse(editor.value));
+  out.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+  store.set('md-text', editor.value);
+}
+
+let timer;
+editor.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(render, 120); });
+
+function show(name, text) {
+  editor.value = text;
+  currentName = name;
+  $('filename').textContent = name;
+  document.title = name + ' - MD Preview';
+  render();
+  preview.scrollTop = editor.scrollTop = 0;
+}
+function load(file) {
+  const r = new FileReader();
+  r.onload = () => show(file.name, r.result);
+  r.readAsText(file);
+}
+
+$('open').onclick = async () => {
+  if (api()) { const f = await api().open_file(); if (f) show(f.name, f.text); }
+  else $('picker').click();
+};
+$('picker').onchange = e => e.target.files[0] && load(e.target.files[0]);
+
+function flash(id, text) { const b = $(id), old = b.textContent; b.textContent = text; setTimeout(() => b.textContent = old, 1200); }
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(editor.value); }
+  catch { editor.select(); document.execCommand('copy'); editor.setSelectionRange(0, 0); }
+  flash('copy', 'Copied');
+};
+$('pdf').onclick = async () => {
+  if (!api()) return window.print();
+  flash('pdf', 'Saving...');
+  const res = await api().export_pdf(currentName.replace(/\.[^.]+$/, '') + '.pdf');
+  if (res && res.error) alert('PDF export failed: ' + res.error);
+  else if (res) flash('pdf', 'Saved');
+};
+$('reset').onclick = () => {
+  if (editor.value !== SAMPLE && !confirm('Clear the editor and go back to the sample?')) return;
+  show('document.md', SAMPLE);
+  $('filename').textContent = 'drop a .md file anywhere';
+  document.title = 'MD Preview';
+};
+
+// drag and drop anywhere
+['dragenter', 'dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); document.body.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); document.body.classList.remove('drag'); }));
+document.addEventListener('drop', e => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
+
+// sync scroll by proportion, both ways. Only the pane the user is driving
+// (mouse over it, or typing in it) pushes its position to the other one,
+// so the programmatic scroll on the other side never echoes back.
+let driver = editor;
+[editor, preview].forEach(el => {
+  el.addEventListener('mouseenter', () => driver = el);
+  el.addEventListener('focus', () => driver = el);
+  el.addEventListener('scroll', () => {
+    if (!$('sync').checked || el !== driver) return;
+    const to = el === editor ? preview : editor;
+    to.scrollTop = el.scrollTop / (el.scrollHeight - el.clientHeight || 1) * (to.scrollHeight - to.clientHeight);
+  });
+});
+
+// draggable divider
+$('divider').addEventListener('mousedown', e => {
+  e.preventDefault();
+  document.body.classList.add('resizing');
+  const move = ev => {
+    const pct = Math.min(85, Math.max(10, ev.clientX / window.innerWidth * 100));
+    editor.style.width = pct + '%';
+  };
+  const up = () => {
+    document.body.classList.remove('resizing');
+    store.set('md-split', editor.style.width);
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', up);
+  };
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+});
+
+// toggles, remembered between sessions
+function setDark(on) {
+  document.body.classList.toggle('dark', on);
+  $('hl-dark').disabled = !on; $('hl-light').disabled = on;
+}
+$('dark').onchange = e => { setDark(e.target.checked); store.set('md-dark', e.target.checked ? '1' : ''); };
+$('hide-editor').onchange = e => document.body.classList.toggle('preview-only', e.target.checked);
+
+const dark = !!store.get('md-dark');
+$('dark').checked = dark; setDark(dark);
+if (store.get('md-split')) editor.style.width = store.get('md-split');
+editor.value = store.get('md-text') ?? SAMPLE;
+render();
+
+// a file passed on the command line ("Open with", double-click) wins over the autosave
+window.addEventListener('pywebviewready', async () => {
+  const f = await api().initial_file();
+  if (f) show(f.name, f.text);
+});
+</script>
+</body>
+</html>
