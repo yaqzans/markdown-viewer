@@ -3,6 +3,7 @@
 Usage: MarkdownViewer.exe [file.md]
 """
 import os
+import socket
 import sys
 
 import webview
@@ -71,12 +72,26 @@ def print_to_pdf(window, path):
         raise RuntimeError('WebView2 reported failure writing ' + path)
 
 
+def free_port(start=42001):
+    """First free port from 42001 up. With persistent storage pywebview always
+    serves on 42001, and Windows lets a second window share a port that is in
+    use, so it would get the first window's page instead of its own."""
+    for port in range(start, start + 100):
+        with socket.socket() as s:
+            try:
+                s.bind(('127.0.0.1', port))
+                return port
+            except OSError:
+                pass
+    return None
+
+
 def main():
     start_path = sys.argv[1] if len(sys.argv) > 1 else None
     title = 'Markdown Viewer' + (' - ' + os.path.basename(start_path) if start_path else '')
     webview.create_window(title, os.path.join(BASE, 'index.html'), js_api=Api(start_path),
                           width=1280, height=820, min_size=(600, 400))
-    webview.start(gui='edgechromium', private_mode=False, storage_path=DATA)
+    webview.start(gui='edgechromium', private_mode=False, storage_path=DATA, http_port=free_port())
 
 
 if __name__ == '__main__':

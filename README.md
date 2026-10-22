@@ -17,10 +17,12 @@ Windows SmartScreen may warn the first time because the exe is not signed. Click
 - **Open** a `.md` file, drag one onto the window, or use **Open with > MarkdownViewer.exe** in Explorer
 - **Export PDF** saves a real `.pdf` file: preview only, always light theme, full length
 - **Copy** the markdown, **Reset** to the sample
-- **Sync scroll** works both ways: scrolling either pane moves the other
+- **Sync scroll** works both ways and follows the content: the paragraph at the top of the editor is the one at the top of the preview
+- **Click a word in the preview** to jump to it in the markdown and highlight it
 - Draggable divider between the panes, **Hide editor** for a full-width preview
-- **Dark mode**
+- **Dark mode** (on by default)
 - Remembers your last text, dark mode and divider position
+- Open several files at once: each window is independent
 
 ## Build from source
 
