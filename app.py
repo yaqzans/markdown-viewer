@@ -2,6 +2,7 @@
 
 Usage: MarkdownViewer.exe [file.md]
 """
+import json
 import os
 import socket
 import sys
@@ -13,25 +14,82 @@ BASE = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(os.environ.get('LOCALAPPDATA', BASE), 'MarkdownViewer')  # keeps localStorage between runs
 
 
-def read_md(path):
-    with open(path, encoding='utf-8', errors='replace') as f:
-        return {'name': os.path.basename(path), 'text': f.read()}
+MD_TYPES = ('Markdown (*.md;*.markdown;*.txt)', 'All files (*.*)')
 
 
 class Api:
+    """Called from the page. Remembers which file on disk the editor belongs to,
+    so Reload and Save know where to go."""
+
     def __init__(self, start_path):
         self.start_path = start_path
+        self.path = None
+        self.crlf = False  # keep the file's own line endings when saving
+        self.bom = False   # and its byte-order mark, if it had one
+
+    def _load(self, path):
+        with open(path, 'rb') as f:
+            self.bom = f.read(3) == b'\xef\xbb\xbf'
+        with open(path, encoding='utf-8-sig', errors='replace', newline='') as f:
+            raw = f.read()
+        self.path, self.crlf = path, '\r\n' in raw
+        return {'name': os.path.basename(path), 'text': raw.replace('\r\n', '\n'), 'path': path}
+
+    def _write(self, path, text):
+        with open(path, 'w', encoding='utf-8-sig' if self.bom else 'utf-8', newline='\r\n' if self.crlf else '\n') as f:
+            f.write(text)
+        self.path = path
+        return {'name': os.path.basename(path), 'path': path}
 
     def initial_file(self):
         if self.start_path and os.path.isfile(self.start_path):
-            return read_md(self.start_path)
+            return self._load(self.start_path)
         return None
 
     def open_file(self):
-        paths = webview.windows[0].create_file_dialog(
-            webview.FileDialog.OPEN,
-            file_types=('Markdown (*.md;*.markdown;*.txt)', 'All files (*.*)'))
-        return read_md(paths[0]) if paths else None
+        paths = webview.windows[0].create_file_dialog(webview.FileDialog.OPEN, file_types=MD_TYPES)
+        return self._load(paths[0]) if paths else None
+
+    def reload(self):
+        return self._load(self.path) if self.path and os.path.isfile(self.path) else None
+
+    def save(self, text):
+        if not self.path:
+            return self.save_as(text, 'document.md')
+        try:
+            return self._write(self.path, text)
+        except OSError as e:
+            return {'error': str(e)}
+
+    def save_as(self, text, suggested_name):
+        path = webview.windows[0].create_file_dialog(
+            webview.FileDialog.SAVE, save_filename=suggested_name, file_types=MD_TYPES)
+        if not path:
+            return None
+        path = path if isinstance(path, str) else path[0]
+        if not os.path.splitext(path)[1]:
+            path += '.md'
+        try:
+            return self._write(path, text)
+        except OSError as e:
+            return {'error': str(e)}
+
+    def forget_file(self):
+        self.path = None
+
+    def set_title(self, title):
+        webview.windows[0].set_title(title)
+
+    def _dropped(self, event):
+        """A file dropped on the window: the page cannot see its path, pywebview can."""
+        files = event.get('dataTransfer', {}).get('files', [])
+        path = files[0].get('pywebviewFullPath') if files else None
+        if path and os.path.isfile(path):
+            # the page asks about unsaved edits first, then calls open_path
+            webview.windows[0].evaluate_js('dropped(%s)' % json.dumps(path))
+
+    def open_path(self, path):
+        return self._load(path) if os.path.isfile(path) else None
 
     def export_pdf(self, suggested_name):
         window = webview.windows[0]
@@ -89,8 +147,15 @@ def free_port(start=42001):
 def main():
     start_path = sys.argv[1] if len(sys.argv) > 1 else None
     title = 'Markdown Viewer' + (' - ' + os.path.basename(start_path) if start_path else '')
-    webview.create_window(title, os.path.join(BASE, 'index.html'), js_api=Api(start_path),
-                          width=1280, height=820, min_size=(600, 400))
+    api = Api(start_path)
+    window = webview.create_window(title, os.path.join(BASE, 'index.html'), js_api=api,
+                                   width=1280, height=820, min_size=(600, 400))
+
+    def bind_drop():
+        from webview.dom import DOMEventHandler
+        window.dom.document.events.drop += DOMEventHandler(api._dropped, prevent_default=True)
+
+    window.events.loaded += bind_drop
     webview.start(gui='edgechromium', private_mode=False, storage_path=DATA, http_port=free_port())
 
 

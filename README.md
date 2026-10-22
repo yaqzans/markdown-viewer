@@ -15,6 +15,8 @@ Windows SmartScreen may warn the first time because the exe is not signed. Click
 - Editor with line numbers and markdown syntax colouring
 - Live preview with GitHub-style rendering: tables, task lists, code blocks with syntax colours
 - **Open** a `.md` file, drag one onto the window, or use **Open with > MarkdownViewer.exe** in Explorer
+- **Reload** (Ctrl+R / F5) re-reads the file from disk after you edit it somewhere else, keeping your place
+- **Save** (Ctrl+S) and **Save as** (Ctrl+Shift+S), keeping the file's line endings; unsaved edits show in the title
 - **Export PDF** saves a real `.pdf` file: preview only, always light theme, full length
 - **Copy** the markdown, **Reset** to the sample
 - **Sync scroll** works both ways and follows the content: the paragraph at the top of the editor is the one at the top of the preview

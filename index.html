@@ -100,7 +100,10 @@
 <body>
 <header>
   <span class="title">Markdown Viewer</span>
-  <button id="open">Open</button>
+  <button id="open" title="Ctrl+O">Open</button>
+  <button id="reload" title="Reload the file from disk (Ctrl+R, F5)">Reload</button>
+  <button id="save" title="Ctrl+S">Save</button>
+  <button id="saveas" title="Ctrl+Shift+S">Save as</button>
   <button id="copy">Copy</button>
   <button id="pdf">Export PDF</button>
   <button id="reset">Reset</button>
@@ -144,6 +147,7 @@ const store = {
 // pywebview injects window.pywebview.api when running as the desktop app
 const api = () => window.pywebview && window.pywebview.api;
 let currentName = 'document.md';
+let savedText = '';  // what is on disk, to tell whether there are unsaved edits
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -171,17 +175,28 @@ function render() {
 }
 
 let timer;
-cm.on('change', () => { clearTimeout(timer); timer = setTimeout(render, 120); });
+cm.on('change', () => { clearTimeout(timer); timer = setTimeout(() => { render(); showName(); }, 120); });
 
-function show(name, text) {
+const dirty = () => cm.getValue() !== savedText;
+function showName(label) {
+  const name = label || currentName, mark = dirty() ? ' (unsaved)' : '';
+  $('filename').textContent = name + mark;
+  document.title = (label ? '' : name + mark + ' - ') + 'Markdown Viewer';
+  if (api()) api().set_title(document.title);
+}
+
+function show(name, text, keepPlace) {
+  const place = scroller.scrollTop;
   cm.setValue(text);
   cm.clearHistory();
+  savedText = text;
   currentName = name;
-  $('filename').textContent = name;
-  document.title = name + ' - Markdown Viewer';
+  showName();
   render();
-  preview.scrollTop = scroller.scrollTop = 0;
+  if (keepPlace) { driver = scroller; scroller.scrollTop = place; syncPreview(); }
+  else preview.scrollTop = scroller.scrollTop = 0;
 }
+const okToDrop = () => !dirty() || confirm('You have unsaved changes. Discard them?');
 function load(file) {
   const r = new FileReader();
   r.onload = () => show(file.name, r.result);
@@ -189,10 +204,46 @@ function load(file) {
 }
 
 $('open').onclick = async () => {
+  if (!okToDrop()) return;
   if (api()) { const f = await api().open_file(); if (f) show(f.name, f.text); }
   else $('picker').click();
 };
 $('picker').onchange = e => e.target.files[0] && load(e.target.files[0]);
+
+$('reload').onclick = async () => {
+  if (!api()) return;
+  if (!okToDrop()) return;
+  const f = await api().reload();
+  if (f) { show(f.name, f.text, true); flash('reload', 'Reloaded'); }
+  else alert('This text is not from a file on disk yet. Use Open, or Save as first.');
+};
+// in a plain browser there is no file on disk to write to, so save downloads a copy
+function download(name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([cm.getValue()], { type: 'text/markdown' }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+async function save(asNew) {
+  const text = cm.getValue();
+  if (!api()) return download(currentName);
+  const res = asNew ? await api().save_as(text, currentName) : await api().save(text);
+  if (!res) return;  // dialog cancelled
+  if (res.error) return alert('Could not save: ' + res.error);
+  savedText = text;
+  currentName = res.name;
+  showName();
+  flash(asNew ? 'saveas' : 'save', 'Saved');
+}
+$('save').onclick = () => save(false);
+$('saveas').onclick = () => save(true);
+
+// Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+R / F5. Reload keys never reload the page itself.
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && k === 's') { e.preventDefault(); save(e.shiftKey); }
+  else if (ctrl && k === 'o') { e.preventDefault(); $('open').click(); }
+  else if ((ctrl && k === 'r') || e.key === 'F5') { e.preventDefault(); $('reload').click(); }
+}, true);
 
 function flash(id, text) { const b = $(id), old = b.textContent; b.textContent = text; setTimeout(() => b.textContent = old, 1200); }
 $('copy').onclick = async () => {
@@ -213,9 +264,9 @@ $('pdf').onclick = async () => {
 };
 $('reset').onclick = () => {
   if (cm.getValue() !== SAMPLE && !confirm('Clear the editor and go back to the sample?')) return;
+  if (api()) api().forget_file();
   show('document.md', SAMPLE);
-  $('filename').textContent = 'drop a .md file anywhere';
-  document.title = 'Markdown Viewer';
+  showName('drop a .md file anywhere');
 };
 
 // click a word in the preview: jump to it in the editor and highlight it.
@@ -266,7 +317,13 @@ out.addEventListener('click', e => {
 // drag and drop anywhere
 ['dragenter', 'dragover'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); document.body.classList.add('drag'); }));
 ['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); document.body.classList.remove('drag'); }));
-document.addEventListener('drop', e => e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
+document.addEventListener('drop', e => !api() && e.dataTransfer.files[0] && load(e.dataTransfer.files[0]));
+// desktop app: pywebview sees the dropped file's path and calls this
+async function dropped(path) {
+  if (!okToDrop()) return;
+  const f = await api().open_path(path);
+  if (f) show(f.name, f.text);
+}
 
 // Sync scroll, both ways, by source line. Every preview block knows the line it
 // starts on, so the line at the top of the editor and the block at the top of
@@ -373,6 +430,7 @@ $('dark').checked = dark; setDark(dark);
 if (store.get('md-split')) editor.style.width = store.get('md-split');
 cm.setValue(store.get('md-text') ?? SAMPLE);
 cm.clearHistory();
+savedText = cm.getValue();
 render();
 
 // a file passed on the command line ("Open with", double-click) wins over the autosave
